@@ -21,7 +21,14 @@ jobs:
       - name: Install opctl (${{ matrix.opctl }})
         run: |
           if [ "${{ matrix.opctl }}" = this-branch ]; then
-            go build -o opctl ./cli
+            # same inputs the repo's compile op generates; the webapp UI isn't needed here
+            mkdir -p webapp/build && echo placeholder > webapp/build/index.html
+            dst=sdks/go/node/containerruntime/embedded/embeds/linux-amd64
+            mkdir -p "$dst" lima
+            curl -fsSL https://github.com/lima-vm/lima/releases/download/v1.2.1/lima-1.2.1-Linux-x86_64.tar.gz | tar -xz -C lima
+            gunzip lima/share/lima/lima-guestagent.Linux-x86_64.gz
+            mv lima/share/lima/lima-guestagent.Linux-x86_64 lima/bin/limactl "$dst"
+            CGO_ENABLED=0 go build -buildvcs=false -tags=containers_image_openpgp -o opctl ./cli
             sudo install opctl /usr/local/bin/opctl
           else
             curl -fsSL https://github.com/opctl/opctl/releases/download/v0.1.76/opctl-linux-amd64.tgz | sudo tar -xz -C /usr/local/bin
