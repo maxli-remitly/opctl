@@ -40,8 +40,10 @@ jobs:
           probe: from-env
         run: |
           set +e
-          opctl run ./verify/env-input 2>&1 | tee out.log
-          rc=${PIPESTATUS[0]}
+          # redirect to a file, not a pipe: the daemonized node inherits stdout and would keep a pipe open
+          timeout 600 opctl run ./verify/env-input > out.log 2>&1 < /dev/null
+          rc=$?
+          cat out.log
           echo "exit code: $rc"
           echo "rc=$rc" >> "$GITHUB_ENV"
       - name: Assert expected outcome
