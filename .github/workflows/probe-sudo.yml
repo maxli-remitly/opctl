@@ -1,0 +1,30 @@
+name: probe-sudo
+on: [push, workflow_dispatch]
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - run: |
+          set -x
+          id; ls -l "$(command -v sudo)"; readlink -f "$(command -v sudo)"
+          sudo --version | head -3
+          sudo -n -l || true
+          export PROBE_VAR='x y,z'
+          sudo -E env | cut -d= -f1 | sort > e.keys || true
+          names=$(compgen -e | grep -v , | paste -sd, -)
+          sudo --preserve-env="$names" env | cut -d= -f1 | sort > p.keys || true
+          compgen -e | sort > u.keys
+          echo "== -E keys missing vs user"; comm -23 u.keys e.keys
+          echo "== -E keys extra vs user"; comm -13 u.keys e.keys
+          echo "== list keys missing vs user"; comm -23 u.keys p.keys
+          echo "== list keys extra vs user"; comm -13 u.keys p.keys
+          for k in HOME PATH USER LOGNAME SHELL MAIL PROBE_VAR SUDO_USER; do
+            echo "$k: user=[${!k}] E=[$(sudo -E printenv $k)] list=[$(sudo --preserve-env="$names" printenv $k)]"
+          done
+          echo "== -E combined with list"; sudo -E --preserve-env=PROBE_VAR printenv PROBE_VAR || echo "rc=$?"
+          export LD_LIBRARY_PATH=/tmp/x
+          echo "LD: E=[$(sudo -E printenv LD_LIBRARY_PATH)] list=[$(sudo --preserve-env=LD_LIBRARY_PATH printenv LD_LIBRARY_PATH)]"
