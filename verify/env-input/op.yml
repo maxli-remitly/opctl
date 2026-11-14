@@ -1,0 +1,10 @@
+name: env-input
+description: fails unless the `probe` input (supplied only as an env var) reaches the op
+inputs:
+  probe:
+    string: {}
+run:
+  container:
+    image: { ref: alpine:3.20 }
+    cmd: [sh, -c, 'test "$probe" = "from-env" && echo "probe=$probe"']
+    envVars: { probe: }

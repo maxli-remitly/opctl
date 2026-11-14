@@ -1,0 +1,48 @@
+name: verify-sudo-rs
+on:
+  push:
+    branches: [verify/sudo-rs-preserve-env]
+  workflow_dispatch:
+jobs:
+  verify:
+    name: ${{ matrix.opctl }} on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-26.04]
+        opctl: [release-v0.1.76, this-branch]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        if: matrix.opctl == 'this-branch'
+        with:
+          go-version-file: go.mod
+      - name: Install opctl (${{ matrix.opctl }})
+        run: |
+          if [ "${{ matrix.opctl }}" = this-branch ]; then
+            go build -o opctl ./cli
+            sudo install opctl /usr/local/bin/opctl
+          else
+            curl -fsSL https://github.com/opctl/opctl/releases/download/v0.1.76/opctl-linux-amd64.tgz | sudo tar -xz -C /usr/local/bin
+          fi
+          sudo --version | head -1
+          id
+      - name: Run op with input supplied only via env (non-root, so opctl re-execs via sudo)
+        env:
+          probe: from-env
+        run: |
+          set +e
+          opctl run ./verify/env-input 2>&1 | tee out.log
+          rc=${PIPESTATUS[0]}
+          echo "exit code: $rc"
+          echo "rc=$rc" >> "$GITHUB_ENV"
+      - name: Assert expected outcome
+        run: |
+          if [ "${{ matrix.opctl }}" = release-v0.1.76 ] && [ "${{ matrix.os }}" = ubuntu-26.04 ]; then
+            echo "expect baseline failure on sudo-rs"
+            [ "$rc" != 0 ] && grep -q "failed to get input 'probe'" out.log && grep -q "'-E' is ignored" out.log
+          else
+            echo "expect success"
+            [ "$rc" = 0 ] && grep -q "probe=from-env" out.log && ! grep -q "'-E' is ignored" out.log
+          fi
